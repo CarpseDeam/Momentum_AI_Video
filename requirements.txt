@@ -1,0 +1,20 @@
+# requirements.txt
+
+# --- Core AI and Data Modeling ---
+google-generativeai
+pydantic              # For robust data validation and settings management
+
+# --- Configuration ---
+pydantic-settings     # For loading configuration from environment variables
+python-dotenv         # For loading environment variables from a .env file
+
+# --- GUI Framework ---
+PyQt6                 # The GUI toolkit used for the main window
+qasync                # Integrates Python's asyncio with the Qt event loop
+
+# --- Media Processing ---
+librosa               # For advanced audio analysis, such as beat detection
+opencv-python         # For video processing, specifically extracting frames (cv2)
+
+# --- Development & Testing ---
+pytest                # A framework for writing and running tests
