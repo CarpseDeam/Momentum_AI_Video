@@ -1,6 +1,6 @@
+import asyncio
 from typing import Optional
 from pathlib import Path
-
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QLabel, QPushButton,
     QFrame # QFrame is not strictly needed for the drop area, but can be used for visual styling
