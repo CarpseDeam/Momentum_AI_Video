@@ -1,104 +1,111 @@
+"""
+File: momentum/services/analysis_service.py
+"""
 import logging
+import asyncio
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
-from momentum.models import AudioAnalysis, VideoSceneAnalysis
-from momentum.services.ai_client import MultimodalAIClient
+from momentum.models.analysis import AudioAnalysis, VideoSceneAnalysis
+from momentum.components.ai_client import MultimodalAIClient
+from momentum.components.audio_processor import AudioProcessor
+from momentum.components.video_extractor import VideoFrameExtractor
 
 # Configure logging for this module
 logger = logging.getLogger(__name__)
-# Basic configuration for demonstration. In a larger application,
-# logging setup would typically be centralized in main.py or a config module.
-if not logger.handlers:
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 
 class AnalysisService:
     """
-    Provides services for analyzing media files. It extracts features like audio beats
-    and uses an AI client to understand video content.
+    Orchestrates media analysis by using dedicated components for audio and video processing.
+    It extracts features like audio beats and uses an AI client for video content analysis.
     """
 
-    def __init__(self, ai_client: MultimodalAIClient):
+    def __init__(self, ai_client: MultimodalAIClient, frames_per_video: int):
         """
-        Initializes the AnalysisService with a MultimodalAIClient instance.
+        Initializes the AnalysisService.
 
         Args:
             ai_client: An instance of MultimodalAIClient for AI-powered analysis.
+            frames_per_video: The number of frames to extract from each video for analysis.
         """
         self.ai_client = ai_client
-        logger.info("AnalysisService initialized.")
+        self.audio_processor = AudioProcessor()
+        self.video_extractor = VideoFrameExtractor()
+        self.frames_per_video = frames_per_video
+        logger.info("AnalysisService initialized with real components.")
 
     async def analyze_audio(self, audio_path: str) -> AudioAnalysis:
         """
-        Analyzes an audio file to extract features like beats and duration.
-        This method currently simulates audio analysis with dummy data, as the
-        MultimodalAIClient does not provide direct audio analysis capabilities.
+        Analyzes an audio file to extract beat timestamps using the AudioProcessor.
 
         Args:
             audio_path: The path to the audio file.
 
         Returns:
-            An AudioAnalysis object containing extracted audio features.
-            Returns an empty AudioAnalysis if the file is not found or an error occurs.
+            An AudioAnalysis object containing the beat timestamps.
         """
-        audio_file_path = Path(audio_path)
-
-        if not audio_file_path.is_file():
-            logger.error(f"Audio file not found at specified path: {audio_path}")
-            # Return a default/empty AudioAnalysis to allow graceful continuation
-            return AudioAnalysis(beats=[], duration=0.0)
-
-        logger.info(f"Simulating audio analysis for: {audio_path}")
+        logger.info(f"Starting audio analysis for: {audio_path}")
         try:
-            # In a real-world scenario, this would involve an audio processing library
-            # (e.g., librosa, pydub) to extract actual beats and duration.
-            # For this exercise, we return fixed dummy data.
-            simulated_duration = 60.0  # Simulate a 60-second audio
-            # Simulate beats every 2 seconds
-            simulated_beats = [i * 2.0 for i in range(int(simulated_duration / 2.0))]
-
-            audio_analysis = AudioAnalysis(beats=simulated_beats, duration=simulated_duration)
-            logger.info(f"Audio analysis simulation complete for {audio_path}. "
-                        f"Duration: {simulated_duration:.2f}s, Beats: {len(simulated_beats)}")
+            # Run the synchronous librosa function in a separate thread
+            # to avoid blocking the asyncio event loop.
+            beat_times = await asyncio.to_thread(
+                self.audio_processor.detect_beats, audio_path
+            )
+            audio_analysis = AudioAnalysis(beat_timestamps=beat_times)
+            logger.info(f"Audio analysis complete for {audio_path}. Found {len(beat_times)} beats.")
             return audio_analysis
         except Exception as e:
-            logger.error(f"An unexpected error occurred during audio analysis simulation for {audio_path}: {e}", exc_info=True)
-            return AudioAnalysis(beats=[], duration=0.0)
+            logger.error(f"An unexpected error occurred during audio analysis for {audio_path}: {e}", exc_info=True)
+            # Return an empty analysis to allow the process to continue gracefully
+            return AudioAnalysis(beat_timestamps=[])
 
     async def analyze_videos(self, video_paths: List[str]) -> Dict[str, VideoSceneAnalysis]:
         """
-        Analyzes a list of video files using the configured MultimodalAIClient
-        to extract scene-level information and content understanding.
+        Analyzes a list of video files concurrently using the video extractor and AI client.
 
         Args:
             video_paths: A list of string paths to the video files.
 
         Returns:
-            A dictionary where keys are video file paths and values are
-            VideoSceneAnalysis objects. Videos that fail analysis will be
-            omitted from the dictionary.
+            A dictionary mapping video file paths to their VideoSceneAnalysis objects.
         """
-        video_analyses: Dict[str, VideoSceneAnalysis] = {}
         logger.info(f"Starting video analysis for {len(video_paths)} video(s).")
 
-        for video_path_str in video_paths:
-            video_file_path = Path(video_path_str)
+        tasks = [self.analyze_single_video(path) for path in video_paths]
+        results = await asyncio.gather(*tasks)
 
-            if not video_file_path.is_file():
-                logger.warning(f"Video file not found, skipping analysis for: {video_path_str}")
-                continue
+        video_analyses: Dict[str, VideoSceneAnalysis] = {}
+        for video_path, analysis_result in zip(video_paths, results):
+            if analysis_result:
+                video_analyses[video_path] = analysis_result
 
-            logger.info(f"Requesting AI content analysis for video: {video_path_str}")
-            try:
-                # Delegate the actual video content analysis to the MultimodalAIClient
-                analysis = await self.ai_client.analyze_video_content(video_path_str)
-                video_analyses[video_path_str] = analysis
-                logger.info(f"AI video analysis complete for {video_path_str}.")
-            except Exception as e:
-                logger.error(f"Failed to analyze video content for {video_path_str} with AI client: {e}", exc_info=True)
-                # Continue to the next video even if one fails, ensuring graceful degradation.
-                continue
-
-        logger.info(f"Finished video analysis. Successfully analyzed {len(video_analyses)} out of {len(video_paths)} videos.")
+        logger.info(
+            f"Finished video analysis. Successfully analyzed {len(video_analyses)} out of {len(video_paths)} videos.")
         return video_analyses
+
+    async def analyze_single_video(self, video_path: str) -> Optional[VideoSceneAnalysis]:
+        """
+        Helper method to extract frames from a single video and send them for AI analysis.
+        """
+        if not Path(video_path).is_file():
+            logger.warning(f"Video file not found, skipping analysis for: {video_path}")
+            return None
+
+        logger.info(f"Processing video: {video_path}")
+        try:
+            # Extract frames in a thread
+            frames = await asyncio.to_thread(
+                self.video_extractor.extract_evenly_spaced_frames, video_path, self.frames_per_video
+            )
+            if not frames:
+                logger.warning(f"No frames were extracted from {video_path}. Skipping AI analysis.")
+                return None
+
+            # Analyze frames with the AI client
+            analysis = await self.ai_client.analyze_frames(frames)
+            logger.info(f"Successfully analyzed video: {video_path}")
+            return analysis
+        except Exception as e:
+            logger.error(f"Failed to analyze video {video_path}: {e}", exc_info=True)
+            return None

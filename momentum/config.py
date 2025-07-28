@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from pydantic import Field
+from pydantic import Field, AliasChoices
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Load environment variables from .env file.
@@ -19,7 +19,6 @@ class Config(BaseSettings):
     """
 
     # Pydantic v2 configuration for settings management.
-    # This specifies how settings are loaded, including the .env file.
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -27,34 +26,32 @@ class Config(BaseSettings):
     )
 
     # --- AI Model Configuration ---
-    GEMINI_API_KEY: str = Field(
-        ...,  # Ellipsis indicates this field is required.
-        description="API key for the Google Gemini AI model. Must be set as an environment variable."
+    API_KEY: str = Field(
+        ...,
+        validation_alias=AliasChoices("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+        description="API key for the Google Gemini AI model. Set via GEMINI_API_KEY or GOOGLE_API_KEY env var."
     )
-    GEMINI_MODEL_NAME: str = Field(
-        "gemini-pro-vision",  # Default value if not specified in environment.
-        description="Name of the Gemini AI model to use for video analysis (e.g., 'gemini-pro-vision')."
+    GEMINI_MODEL: str = Field(
+        "gemini-2.5-pro",
+        description="Name of the Gemini AI model to use for all tasks. Set to 'gemini-2.5-pro' as requested."
     )
 
-    # --- General Application Configuration (add as needed) ---
-    # Example: A base directory for data storage, defaulting to a 'data' folder
-    # relative to the project root.
-    # BASE_DATA_DIR: Path = Field(
-    #     Path("./data"),
-    #     description="Base directory for storing application data (e.g., processed files, logs)."
-    # )
+    # --- Analysis Configuration ---
+    FRAMES_PER_VIDEO: int = Field(
+        10,
+        description="Number of evenly spaced frames to extract from each video for analysis."
+    )
 
     def __str__(self) -> str:
         """
         Provides a user-friendly string representation of the configuration.
         Sensitive information like API keys are not fully exposed.
         """
-        api_key_status = "SET" if self.GEMINI_API_KEY else "NOT SET"
+        api_key_status = "SET" if self.API_KEY else "NOT SET"
         return (
             f"Config("
-            f"GEMINI_MODEL_NAME='{self.GEMINI_MODEL_NAME}', "
-            f"GEMINI_API_KEY_STATUS='{api_key_status}'"
-            # f", BASE_DATA_DIR='{self.BASE_DATA_DIR}'" # Uncomment if BASE_DATA_DIR is added
+            f"GEMINI_MODEL='{self.GEMINI_MODEL}', "
+            f"API_KEY_STATUS='{api_key_status}'"
             f")"
         )
 

@@ -1,3 +1,6 @@
+"""
+File: momentum/services/editor_service.py
+"""
 import asyncio
 import logging
 import subprocess
@@ -6,12 +9,12 @@ import shutil
 from pathlib import Path
 from typing import List
 
-from momentum.models import EditDecisionList, Shot, TextOverlay
+from momentum.models.editing import EditDecisionList, Shot, TextOverlay
 
 # Configure logging for the EditorService
 logger = logging.getLogger(__name__)
 # Set level to INFO for production, DEBUG for development for more verbose FFmpeg output
-logger.setLevel(logging.INFO) 
+logger.setLevel(logging.INFO)
 # Add a stream handler if not already configured by the main application
 if not logger.handlers:
     handler = logging.StreamHandler()
@@ -85,7 +88,7 @@ class EditorService:
 
             # --- Step 1: Process each shot (trim and add text overlay) ---
             for i, shot in enumerate(edl.shots):
-                input_video_path = Path(shot.video_path)
+                input_video_path = Path(shot.source_video)
                 if not input_video_path.exists():
                     logger.warning(f"Input video for shot {i} not found: {input_video_path}. Skipping this shot.")
                     continue
@@ -101,10 +104,10 @@ class EditorService:
                     "-to", str(shot.end_time),
                     "-c:v", "libx264",
                     "-preset", "superfast",  # Faster encoding, slightly larger file
-                    "-crf", "23",             # Constant Rate Factor (quality setting)
+                    "-crf", "23",  # Constant Rate Factor (quality setting)
                     "-c:a", "aac",
-                    "-b:a", "128k",           # Audio bitrate
-                    "-y",                     # Overwrite output files without asking
+                    "-b:a", "128k",  # Audio bitrate
+                    "-y",  # Overwrite output files without asking
                 ]
 
                 # Add text overlay filter if specified in the shot
@@ -117,9 +120,9 @@ class EditorService:
                         "x=(w-text_w)/2:y=h-th-10:"
                         "fontcolor=white:fontsize=24:box=1:boxcolor=black@0.5"
                     )
-                    command.extend(["-vf", drawtext_filter]) # Add video filter argument
+                    command.extend(["-vf", drawtext_filter])  # Add video filter argument
 
-                command.append(str(temp_clip_path)) # Add output file path
+                command.append(str(temp_clip_path))  # Add output file path
 
                 logger.debug(f"Executing FFmpeg for shot {i}: {' '.join(command)}")
                 try:
@@ -128,8 +131,8 @@ class EditorService:
                         subprocess.run,
                         command,
                         check=True,  # Raise CalledProcessError if the command returns a non-zero exit code
-                        capture_output=True, # Capture stdout and stderr
-                        text=True # Decode stdout/stderr as text
+                        capture_output=True,  # Capture stdout and stderr
+                        text=True  # Decode stdout/stderr as text
                     )
                     intermediate_clips.append(temp_clip_path)
                     logger.info(f"Successfully processed shot {i} to {temp_clip_path}")
@@ -151,14 +154,14 @@ class EditorService:
                     # FFmpeg concat demuxer requires 'file ' followed by the path
                     # Using .as_posix() for cross-platform path compatibility in the list file
                     f.write(f"file '{clip_path.as_posix()}'\n")
-            
+
             concatenated_video_path = temp_dir / "concatenated_video.mp4"
             concat_command = [
                 "ffmpeg",
-                "-f", "concat",   # Use concat demuxer
-                "-safe", "0",     # Allow unsafe file paths (e.g., absolute paths)
+                "-f", "concat",  # Use concat demuxer
+                "-safe", "0",  # Allow unsafe file paths (e.g., absolute paths)
                 "-i", str(concat_list_path),
-                "-c", "copy",     # Copy streams without re-encoding for speed
+                "-c", "copy",  # Copy streams without re-encoding for speed
                 "-y",
                 str(concatenated_video_path)
             ]
@@ -182,14 +185,14 @@ class EditorService:
             # --- Step 3: Add audio to the concatenated video ---
             final_command = [
                 "ffmpeg",
-                "-i", str(concatenated_video_path), # First input: video stream
-                "-i", str(audio_path_obj),          # Second input: audio stream
-                "-map", "0:v",                      # Map video stream from the first input
-                "-map", "1:a",                      # Map audio stream from the second input
-                "-c:v", "copy",                     # Copy video stream without re-encoding
-                "-c:a", "aac",                      # Re-encode audio to AAC for compatibility
+                "-i", str(concatenated_video_path),  # First input: video stream
+                "-i", str(audio_path_obj),  # Second input: audio stream
+                "-map", "0:v",  # Map video stream from the first input
+                "-map", "1:a",  # Map audio stream from the second input
+                "-c:v", "copy",  # Copy video stream without re-encoding
+                "-c:a", "aac",  # Re-encode audio to AAC for compatibility
                 "-b:a", "128k",
-                "-shortest",                        # Finish encoding when the shortest input stream ends
+                "-shortest",  # Finish encoding when the shortest input stream ends
                 "-y",
                 str(output_path_obj)
             ]
@@ -203,7 +206,7 @@ class EditorService:
                     text=True
                 )
                 logger.info(f"Successfully rendered final video to: {output_path_obj}")
-                return output_path_obj.as_posix() # Return the path as a string
+                return output_path_obj.as_posix()  # Return the path as a string
             except subprocess.CalledProcessError as e:
                 logger.error(f"FFmpeg failed during final audio merge. Stderr: {e.stderr}")
                 raise RuntimeError(f"Failed to merge audio and video: {e.stderr}") from e

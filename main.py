@@ -5,8 +5,10 @@ import asyncio
 
 from PyQt6.QtWidgets import QApplication
 from qasync import QEventLoop
+from pydantic import ValidationError
 
-from momentum.services.ai_client import MultimodalAIClient
+from momentum.config import Config
+from momentum.components.ai_client import MultimodalAIClient
 from momentum.services.analysis_service import AnalysisService
 from momentum.services.director_service import DirectorService
 from momentum.services.editor_service import EditorService
@@ -22,17 +24,24 @@ def main():
     Initializes backend services, the application controller, the GUI,
     and starts the asyncio-compatible Qt event loop.
     """
-    # 1. Retrieve API Key from environment variables
-    api_key = os.getenv('MOMENTUM_AI_API_KEY')
-    if not api_key:
-        logging.critical("MOMENTUM_AI_API_KEY environment variable not set. "
-                         "Please set it to your AI service API key before running the application.")
+    # 1. Load application configuration
+    try:
+        config = Config()
+        logging.info(f"Configuration loaded successfully: {config}")
+    except ValidationError as e:
+        logging.critical(f"Configuration error. Please check your .env file or environment variables. Details: {e}")
         sys.exit(1)
 
     # 2. Initialize Backend Services
     try:
-        ai_client = MultimodalAIClient(api_key=api_key)
-        analysis_service = AnalysisService(ai_client=ai_client)
+        ai_client = MultimodalAIClient(
+            api_key=config.API_KEY,
+            model_name=config.GEMINI_MODEL
+        )
+        analysis_service = AnalysisService(
+            ai_client=ai_client,
+            frames_per_video=config.FRAMES_PER_VIDEO
+        )
         director_service = DirectorService(ai_client=ai_client)
         editor_service = EditorService()
         logging.info("All backend services initialized successfully.")

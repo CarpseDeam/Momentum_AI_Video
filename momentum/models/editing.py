@@ -1,37 +1,8 @@
+"""
+File: momentum/models/editing.py
+"""
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict
-
-# --- momentum/models/analysis.py ---
-# These models define the structured data coming INTO the DirectorService.
-
-class VideoSceneAnalysis(BaseModel):
-    """
-    Represents the structured analysis of a single video clip as defined
-    by the multimodal AI model's output specification.
-    """
-    description: str = Field(
-        ...,
-        description="A brief, one-sentence description of the clip's content."
-    )
-    key_moment_timestamp: float = Field(
-        ...,
-        description="The estimated time in seconds of the most interesting or action-packed moment.",
-        gt=0.0
-    )
-
-class AudioAnalysis(BaseModel):
-    """
-    Represents the structured analysis of an audio file, containing the
-    detected beat timestamps.
-    """
-    beat_timestamps: List[float] = Field(
-        default_factory=list,
-        description="A list of floating-point numbers, where each number is a beat's timestamp in seconds."
-    )
-
-# --- momentum/models/editing.py ---
-# These models define the structured data being created BY the DirectorService.
-# The AI will be instructed to generate a JSON object conforming to the EditDecisionList schema.
+from typing import List, Optional
 
 class TextOverlay(BaseModel):
     """

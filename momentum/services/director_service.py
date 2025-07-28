@@ -1,6 +1,12 @@
+"""
+File: momentum/services/director_service.py
+"""
 import logging
-from momentum.models import EditDecisionList, VideoSceneAnalysis, AudioAnalysis
-from momentum.services.ai_client import MultimodalAIClient
+from typing import Dict, List
+
+from momentum.components.ai_client import MultimodalAIClient
+from momentum.models.analysis import AudioAnalysis, VideoSceneAnalysis
+from momentum.models.editing import EditDecisionList
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +29,10 @@ class DirectorService:
 
     async def create_edit_plan(
         self,
-        video_analyses: dict[str, VideoSceneAnalysis],
+        video_analyses: Dict[str, VideoSceneAnalysis],
         audio_analysis: AudioAnalysis,
         video_goal: str,
-        key_features: list[str]
+        key_features: List[str]
     ) -> EditDecisionList:
         """
         Generates an Edit Decision List (EDL) based on video and audio analysis,
@@ -52,6 +58,7 @@ class DirectorService:
             f"and key features: {key_features}"
         )
         try:
+            # Delegate the EDL generation to the AI client
             edl = await self._ai_client.generate_edit_decision_list(
                 video_analyses=video_analyses,
                 audio_analysis=audio_analysis,
